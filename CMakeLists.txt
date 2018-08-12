@@ -6,7 +6,12 @@ if(THREAD_TESTS)
   add_subdirectory(test)
 endif()
 
+if(NOT TARGET lock)
+  add_subdirectory(lock)
+endif()
+
 file(GLOB srcs src/*.cpp)
 add_library(${PROJECT_NAME} INTERFACE)
 target_sources(${PROJECT_NAME} INTERFACE ${srcs})
 target_include_directories(${PROJECT_NAME} INTERFACE include)
+target_link_libraries(${PROJECT_NAME} INTERFACE lock)
