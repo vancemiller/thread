@@ -1,32 +1,23 @@
 #include "thread.hpp"
-#include "lock.hpp"
 
-#include <cstring>
-#include <csignal>
 #include <exception>
-#include <fstream>
-#include <iostream>
 #include <mutex>
-#include <unistd.h>
 
+namespace wrapper {
 
-static struct ThreadArgs {
-  const std::function<int(int, char**)>& main;
-  const int argc;
-  const std::unique_ptr<char*[]>& argv;
-  mutable bool started = false;
-  mutable Mutex mutex;
-  mutable Condition started_cond;
-}
-
-static int thread_function(const void* arg) {
+void* Thread::thread_function(void* arg) {
+  int err;
+  if ((err = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL)))
+    throw std::system_error(err, std::generic_category(), "pthread_setcanceltype failed");
   const ThreadArgs* args = static_cast<const ThreadArgs*>(arg);
   {
     std::lock_guard<Mutex> lock(args->mutex);
     args->started = true;
     args->started_cond.broadcast();
   }
-  return args->main(args->argc, args->argv);
+  int* ret = new int;
+  *ret = args->main(args->argc, args->argv.get());
+  return static_cast<void*>(ret);
 }
 
 static std::unique_ptr<char*[]> build_args(const std::list<std::string>& args) {
@@ -41,64 +32,55 @@ static std::unique_ptr<char*[]> build_args(const std::list<std::string>& args) {
   return argv;
 }
 
-static pthread_t spawn_thread(const std::function<int(int, char**)>& main, int argc,
-    std::unique_ptr<char*[]>& argv) {
-  ThreadArgs args{main, argc, argv};
+pthread_t Thread::spawn_thread(ThreadArgs& args) {
   int err;
-  if ((err = pthread_create(&action_thread, NULL, thread_function, &args)))
+  pthread_t thread;
+  if ((err = pthread_create(&thread, NULL, thread_function, &args)))
     throw std::system_error(err, std::generic_category(), "pthread_create failed");
   std::lock_guard<Mutex> lock(args.mutex);
-  while (!args->started) args.started_cond.wait(args.mutex);
+  while (!args.started) args.started_cond.wait(args.mutex);
+  return thread;
 }
 
 Thread::Thread(const std::function<int(int, char**)> main, const std::list<std::string>& args) :
     Thread(main, args.size(), build_args(args)) {}
 
 Thread::Thread(const std::function<int(int, char**)> main, int argc,
-    std::unique_ptr<char*[]> argv) : main(main), argc(argc), argv(argv),
-    thread(spawn_thread(main, argc, argv)) {}
+    std::unique_ptr<char*[]> argv) : args{main, argc, std::move(argv)},
+    thread(spawn_thread(args)) {}
 
-Thread::Thread(Thread&& o) {
-  // TODO
-}
+Thread::Thread(Thread&& o) : args(std::move(o.args)), thread(o.thread) { o.thread = 0; }
 
 Thread::~Thread(void) {
-
-}
-
-Thread::Thread(std::function<int(void)> action, std::function<void(void)> cancel) :
-      action(action), cancel(cancel), joined(false), thread_started(false) {
-}
-
-Thread::Thread(Action& a) : Thread([&a] (void) -> int {return a.main(); },
-   [&a] (void) -> void { a.cancel(); }) {}
-
-Thread::~Thread(void) {
-  if (!joined) {
-    cancel();
-    join();
+  if (thread) {
+    wait();
   }
 }
 
-void Thread::run_action(void) {
-  {
-    std::lock_guard<Mutex> lock(thread_started_mutex);
-    thread_started = true;
-    thread_started_cond.broadcast();
-  }
-  if (std::signal(SIGPIPE, SIG_IGN) == SIG_ERR) throw std::runtime_error("Ignore SIGPIPE failed.");
-  int ret = action();
-}
-
-void Thread::join(void) {
+int Thread::wait(void) const {
   int err;
-  if (!joined && (err = pthread_join(action_thread, NULL))) {
-    throw std::runtime_error(std::string("Thread join failed: ") + strerror(err) + " " +
-        std::to_string(action_thread) + ".");
+  void* ret;
+  if ((err = pthread_join(thread, &ret)))
+    throw std::system_error(err, std::generic_category(), "pthread_join failed");
+  int retval;
+  if (ret == PTHREAD_CANCELED)
+    retval = -1;
+  else {
+    retval = *reinterpret_cast<int*>(ret);
+    free(ret);
   }
-  joined = true;
+  thread = 0;
+  return retval;
 }
 
-const pthread_t Thread::id(void) const {
-  return action_thread;
+void Thread::kill(void) {
+  int err;
+  if ((err = pthread_cancel(thread)))
+    throw std::system_error(err, std::generic_category(), "pthread_cancel failed");
 }
+
+pthread_t Thread::gettid(void) const {
+  return thread;
+}
+
+} // namespace wrapper

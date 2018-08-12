@@ -1,20 +1,30 @@
 #ifndef THREAD_HPP
 #define THREAD_HPP
 
+#include "lock.hpp"
+
 #include <functional>
+#include <list>
+#include <memory>
 #include <string>
 #include <pthread.h>
 
+namespace wrapper {
 class Thread {
   private:
-    const std::function<int(int, char**)> main;
-    const int argc;
-    const std::unique_ptr<char*[]> argv;
-    pthread_t thread;
-    bool joined;
-    bool thread_started;
+    struct ThreadArgs {
+      const std::function<int(int, char**)> main;
+      const int argc;
+      std::unique_ptr<char*[]> argv;
+      mutable bool started = false;
+      mutable Mutex mutex;
+      mutable Condition started_cond;
+    };
+    ThreadArgs args;
+    mutable pthread_t thread;
   private:
     static void* thread_function(void* arg);
+    static pthread_t spawn_thread(ThreadArgs& args);
     void run_action(void);
   public:
     Thread(const std::function<int(int, char**)> main, const std::list<std::string>& args);
@@ -25,9 +35,9 @@ class Thread {
     Thread(Thread&& o);
     ~Thread(void);
   public:
-    const pthread_t gettid(void) const;
-    void join(void) const;
+    pthread_t gettid(void) const;
+    int wait(void) const;
     void kill(void);
 };
-
+} // namespace wrapper
 #endif
