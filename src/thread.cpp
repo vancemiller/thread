@@ -1,5 +1,6 @@
 #include "thread.hpp"
 
+#include <cstring>
 #include <exception>
 #include <mutex>
 
