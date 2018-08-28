@@ -17,20 +17,8 @@ void* Thread::thread_function(void* arg) {
     args->started_cond.broadcast();
   }
   int* ret = new int;
-  *ret = args->main(args->argc, args->argv.get());
+  *ret = args->main();
   return static_cast<void*>(ret);
-}
-
-static std::unique_ptr<char*[]> build_args(const std::list<std::string>& args) {
-  std::unique_ptr<char*[]> argv = std::make_unique<char*[]>(args.size() + 1);
-  size_t i = 0;
-  for (auto it : args) {
-    argv[i] = new char[it.length() + 1];
-    std::strncpy(argv[i], it.c_str(), it.length() + 1);
-    i++;
-  }
-  argv[args.size()] = NULL;
-  return argv;
 }
 
 pthread_t Thread::spawn_thread(ThreadArgs& args) {
@@ -43,12 +31,7 @@ pthread_t Thread::spawn_thread(ThreadArgs& args) {
   return thread;
 }
 
-Thread::Thread(const std::function<int(int, char**)> main, const std::list<std::string>& args) :
-    Thread(main, args.size(), build_args(args)) {}
-
-Thread::Thread(const std::function<int(int, char**)> main, int argc,
-    std::unique_ptr<char*[]> argv) : args{main, argc, std::move(argv)},
-    thread(spawn_thread(args)) {}
+Thread::Thread(const std::function<int(void)> main) : args{main}, thread(spawn_thread(args)) {}
 
 Thread::Thread(Thread&& o) : args(std::move(o.args)), thread(o.thread) { o.thread = 0; }
 

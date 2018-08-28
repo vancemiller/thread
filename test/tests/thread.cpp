@@ -3,60 +3,59 @@
 
 namespace wrapper {
 
-int hello_world_main(int argc, char** argv) {
-  EXPECT_EQ(argc, 1);
-  EXPECT_STREQ("hello_world", argv[0]);
+int hello_world(int data) {
+  EXPECT_EQ(1, data);
   return 1234;
 }
 
 TEST(Thread, ConstructDestruct) {
-  Thread(hello_world_main, {"hello_world"});
+  Thread([] (void) -> int { return hello_world(1); });
 }
 
 TEST(Thread, ReturnValue) {
-  Thread hello(hello_world_main, {"hello_world"});
+  Thread hello([] (void) -> int { return hello_world(1); });
   EXPECT_EQ(1234, hello.wait());
 }
 
 TEST(Thread, WaitTwice) {
-  Thread hello(hello_world_main, {"hello_world"});
+  Thread hello([] (void) -> int { return hello_world(1); });
   hello.wait();
   EXPECT_THROW(hello.wait(), std::system_error);
 }
 
 TEST(Thread, Kill) {
-  Thread hello(hello_world_main, {"hello_world"});
+  Thread hello([] (void) -> int { return hello_world(1); });
   hello.kill();
   hello.wait();
 }
 
 TEST(Thread, KillAfterWait) {
-  Thread hello(hello_world_main, {"hello_world"});
+  Thread hello([] (void) -> int { return hello_world(1); });
   hello.wait();
   EXPECT_THROW(hello.kill(), std::system_error);
 }
 
-int infinite_loop_main(int argc, char** argv) {
+int infinite_loop(void) {
   while (true)
     ;
   return 0;
 }
 
 TEST(Thread, InfiniteLoopKill) {
-  Thread inf(infinite_loop_main, {"infinite_loop"});
+  Thread inf([] (void) -> int { return infinite_loop(); });
   inf.kill();
   EXPECT_EQ(-1, inf.wait());
 }
 
 TEST(Thread, KillTwice) {
-  Thread inf(infinite_loop_main, {"infinite_loop"});
+  Thread inf([] (void) -> int { return infinite_loop(); });
   inf.kill();
   EXPECT_NO_THROW(inf.kill()); // can call kill as much as we want
   EXPECT_EQ(-1, inf.wait());
 }
 
 TEST(Thread, Move) {
-  Thread inf(infinite_loop_main, {"infinite_loop"});
+  Thread inf([] (void) -> int { return infinite_loop(); });
   Thread moved(std::move(inf));
   EXPECT_THROW(inf.kill(), std::system_error);
   EXPECT_THROW(inf.wait(), std::system_error);

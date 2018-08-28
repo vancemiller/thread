@@ -13,9 +13,7 @@ namespace wrapper {
 class Thread {
   private:
     struct ThreadArgs {
-      const std::function<int(int, char**)> main;
-      const int argc;
-      std::unique_ptr<char*[]> argv;
+      const std::function<int(void)> main;
       mutable bool started = false;
       mutable Mutex mutex;
       mutable Condition started_cond;
@@ -27,8 +25,7 @@ class Thread {
     static pthread_t spawn_thread(ThreadArgs& args);
     void run_action(void);
   public:
-    Thread(const std::function<int(int, char**)> main, const std::list<std::string>& args);
-    Thread(const std::function<int(int, char**)> main, int argc, std::unique_ptr<char*[]> argv);
+    Thread(const std::function<int(void)> main);
     Thread(void) = delete;
     Thread(const Thread&) = delete;
     Thread(Thread&) = delete;
