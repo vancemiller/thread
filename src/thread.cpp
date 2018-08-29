@@ -63,8 +63,4 @@ void Thread::kill(void) {
     throw std::system_error(err, std::generic_category(), "pthread_cancel failed");
 }
 
-pthread_t Thread::gettid(void) const {
-  return thread;
-}
-
 } // namespace wrapper

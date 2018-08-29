@@ -32,9 +32,11 @@ class Thread {
     Thread(Thread&& o);
     ~Thread(void);
   public:
-    pthread_t gettid(void) const;
     int wait(void) const;
     void kill(void);
+    pthread_t gettid(void) const noexcept { return thread; }
+    bool operator==(const Thread& o) const noexcept { return thread == o.thread; }
+    bool operator!=(const Thread& o) const noexcept { return thread != o.thread; }
 };
 } // namespace wrapper
 #endif
